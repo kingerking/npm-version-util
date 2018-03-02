@@ -11,16 +11,12 @@
         "Other"
     ],
     "activationEvents": [
-        "onCommand:extension.sayHello"
+        "onLanguage:javascript",
+        "onLanguage:typescript"
     ],
     "main": "./out/extension",
     "contributes": {
-        "commands": [
-            {
-                "command": "extension.sayHello",
-                "title": "Hello World"
-            }
-        ]
+        
     },
     "scripts": {
         "vscode:prepublish": "npm run compile",
