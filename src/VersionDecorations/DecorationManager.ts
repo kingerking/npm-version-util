@@ -1,9 +1,11 @@
 import { window, TextEditor, Disposable, ExtensionContext } from 'vscode';
 
+
+
 /**
  * Will handle a group of decorations.
 */
-export default abstract class DecorationManager implements Disposable {
+export default class DecorationManager implements Disposable {
     /**
      * The local instance of a text editor that this instance manages.
      */
