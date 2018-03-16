@@ -1,5 +1,7 @@
 'use strict';
 import * as vscode from 'vscode';
+import DecorationManager from './VersionDecorations/DecorationManager';
+
 
 function moduleName(reg: RegexpCluster, data: string): string
 {
@@ -9,30 +11,28 @@ function moduleName(reg: RegexpCluster, data: string): string
     return null;
 }
 
+
+/**
+ * Will search package.json and find the module name and version.
+ * @param name 
+ */
+function _getVersion(name: string, context: vscode.ExtensionContext): string {
+    let directory = context.asAbsolutePath('/package.json');
+    const data = require(directory) as { dependencies: Object, devDependencies: Object };
+
+    if (!data.dependencies[name] || !data.devDependencies[name])
+        return "Not installed";    
+    return data.dependencies[name] || data.devDependencies[name];
+}
+
+
 export function activate(context: vscode.ExtensionContext) {
 
     console.log('NPM version utility loaded.');
 
     const currentEditor: vscode.TextEditor = vscode.window.activeTextEditor;
-    const darkBackground: string = "rgba(60, 60, 60, .8)";
-    const lightBackground: string = "rgba(155, 155, 155, .8)";
-    
-    const decoration: vscode.TextEditorDecorationType = vscode.window.createTextEditorDecorationType({
-        rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
-        dark: {
-            after: {
-                backgroundColor: "rgba(48,48,48,.8)",
-                color: "rgba(155, 155, 155, .8)",
-            }
-        },
-        after: {
-            contentText: "Hello world :)",
-            textDecoration: 'margin: 0 6px 0 6px; padding: 0 6px 0 6px; border-radius: 6px;',
-            color: "rgba(0, 0, 0, .5)",
-            backgroundColor: "rgba(200, 200, 200, 1)",
-            margin: "0 3px 0 3px"
-        }
-    });    
+    const decorationManager: DecorationManager = new DecorationManager(context, currentEditor);
+
     
     vscode.window.onDidChangeTextEditorSelection(event => {
         // const regexp = new RegexpCluster(/require\(.*"/g, /require\(.*'/g, /import.*from.*'/g, /import.*from.*"/g);
@@ -52,9 +52,10 @@ export function activate(context: vscode.ExtensionContext) {
             const { end } = range;
             const target = new Range(new Position(end.line, end.character), new Position(end.line, end.character));
             const name = moduleName(new RegexpCluster(/'.*'/, /".*"/), lineData);
-            if (name)
+            const decorationMessage: string = !name ? "No module name" : _getVersion(name, context);
+            if (!name)
             {
-                console.log("module name: ", name)
+                console.log("module not defined: ", name)
             }    
             ranges.push(target);
         } 

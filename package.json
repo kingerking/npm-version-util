@@ -15,9 +15,7 @@
         "onLanguage:typescript"
     ],
     "main": "./out/extension",
-    "contributes": {
-        
-    },
+    "contributes": {},
     "scripts": {
         "vscode:prepublish": "npm run compile",
         "compile": "tsc -p ./",
@@ -30,5 +28,8 @@
         "vscode": "^1.1.6",
         "@types/node": "^7.0.43",
         "@types/mocha": "^2.2.42"
+    },
+    "dependencies": {
+        "lodash": "^4.17.5"
     }
 }
