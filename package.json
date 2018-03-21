@@ -1,9 +1,9 @@
 {
     "name": "npm-version-util",
     "displayName": "NPM Version Util",
-    "description": "A lightweight inline version view anand managment utility.",
-    "version": "0.0.1",
-    "publisher": "kyle",
+    "description": "A lightweight inline version view utility.",
+    "version": "0.0.2",
+    "publisher": "KyleKing",
     "engines": {
         "vscode": "^1.20.0"
     },
