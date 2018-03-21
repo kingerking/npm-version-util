@@ -1,7 +1,16 @@
 'use strict';
 import * as vscode from 'vscode';
-import DecorationManager from './VersionDecorations/DecorationManager';
+import { TextEditorDecorationType } from 'vscode';
+import { join } from 'path';
+import { readFileSync } from 'fs';
+import { merge } from 'lodash';
 
+const darkBackground: string = "rgba(60, 60, 60, .8)";
+const lightBackground: string = "rgba(155, 155, 155, .8)";
+
+
+let ranges: Array<vscode.Range> = [];
+let decorations: Array<vscode.TextEditorDecorationType> = [];
 
 function moduleName(reg: RegexpCluster, data: string): string
 {
@@ -12,57 +21,106 @@ function moduleName(reg: RegexpCluster, data: string): string
 }
 
 
+
+/**
+ * Createa  text editor decoration type
+ */
+function _createDecorationType(text: string): TextEditorDecorationType {
+    return vscode.window.createTextEditorDecorationType({
+        rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
+        dark: {
+            after: {
+                backgroundColor: "rgba(48,48,48,.8)",
+                color: "rgba(155, 155, 155, .8)",
+            }
+        },
+        after: {
+            contentText: text,
+            textDecoration: 'margin: 0 6px 0 6px; padding: 0 6px 0 6px; border-radius: 6px;',
+            color: "rgba(0, 0, 0, .5)",
+            backgroundColor: "rgba(200, 200, 200, 1)",
+            margin: "0 6px 0 6px"
+        }
+    });   ;
+}
+
+export interface IPackageJsonDef {
+    dependencies?: Object;
+    devDependencies?: Object 
+}
+
+function _getPackageJSONObject(folderPath: vscode.WorkspaceFolder) {
+    const path = join(folderPath.uri.path, 'package.json');
+    const obj = JSON.parse(readFileSync(path).toString('utf-8'));
+
+    return obj;
+}
+
 /**
  * Will search package.json and find the module name and version.
  * @param name 
  */
-function _getVersion(name: string, context: vscode.ExtensionContext): string {
-    let directory = context.asAbsolutePath('/package.json');
-    const data = require(directory) as { dependencies: Object, devDependencies: Object };
+function _getVersion(name: string): string {
+    const data: IPackageJsonDef = { dependencies: {}, devDependencies: {} };
 
-    if (!data.dependencies[name] || !data.devDependencies[name])
+    // require all package.json's present, then load the data array.
+    for (const folder of vscode.workspace.workspaceFolders)
+    {
+        const packageJSON = _getPackageJSONObject(folder) as IPackageJsonDef;
+
+        if (packageJSON.dependencies)
+            data.dependencies = merge(data.dependencies, packageJSON.dependencies);
+        if (packageJSON.devDependencies)
+            data.devDependencies = merge(data.devDependencies, packageJSON.devDependencies);
+    }
+    if (!data.dependencies[name] && !data.devDependencies[name])
         return "Not installed";    
     return data.dependencies[name] || data.devDependencies[name];
 }
 
+function _updateVersions(editor: vscode.TextEditor) {
+    // const regexp = new RegexpCluster(/require\(.*"/g, /require\(.*'/g, /import.*from.*'/g, /import.*from.*"/g);
+
+    const results: Array<QueryResult> = new DocumentQuery(
+        new RegexpCluster(/require\(.*"/g, /require\(.*'/g, /import.*from.*'/g, /import.*from.*"/g)).exec(editor.document);
+
+    let match;
+    // remove all instances of the given decoration
+    // for (const dec of decorations)
+    //     dec.dispose();    
+    for (let i = 0; i < decorations.length; i++)
+        editor.setDecorations(decorations[i], []);
+
+    if (ranges.length !== 0) ranges = [];
+    if (decorations.length !== 0) decorations = [];
+
+    for (const result of results) {
+        const { Position, Range } = vscode;
+        const { match, range, lineData } = result;
+        const { end } = range;
+        const target = new Range(new Position(end.line, end.character), new Position(end.line, end.character));
+        const name = moduleName(new RegexpCluster(/'.*'/, /".*"/), lineData);
+        const decorationMessage: string = !name ? "Not installed" : _getVersion(name);
+        // if (!name) console.log("module not defined: ", name);
+
+        decorations.push(_createDecorationType(decorationMessage));
+        ranges.push(target);
+    }
+
+
+    for (let i = 0; i < decorations.length; i++)
+        editor.setDecorations(decorations[i], [ranges[i]]);   
+}
 
 export function activate(context: vscode.ExtensionContext) {
 
     console.log('NPM version utility loaded.');
-
-    const currentEditor: vscode.TextEditor = vscode.window.activeTextEditor;
-    const decorationManager: DecorationManager = new DecorationManager(context, currentEditor);
-
     
-    vscode.window.onDidChangeTextEditorSelection(event => {
-        // const regexp = new RegexpCluster(/require\(.*"/g, /require\(.*'/g, /import.*from.*'/g, /import.*from.*"/g);
-        
-        const results: Array<QueryResult> = new DocumentQuery(
-            new RegexpCluster(/require\(.*"/g, /require\(.*'/g, /import.*from.*'/g, /import.*from.*"/g)).exec(event.textEditor.document);    
-        
-        
-        
-        event.textEditor.setDecorations(decoration, []);
-        let match;
-        let ranges: Array<vscode.Range> = [];
+    vscode.window.onDidChangeTextEditorSelection(event => _updateVersions(event.textEditor));
+    vscode.window.onDidChangeActiveTextEditor(event => _updateVersions(event));
 
-        for (const result of results) { 
-            const { Position, Range } = vscode;
-            const { match, range, lineData } = result;
-            const { end } = range;
-            const target = new Range(new Position(end.line, end.character), new Position(end.line, end.character));
-            const name = moduleName(new RegexpCluster(/'.*'/, /".*"/), lineData);
-            const decorationMessage: string = !name ? "No module name" : _getVersion(name, context);
-            if (!name)
-            {
-                console.log("module not defined: ", name)
-            }    
-            ranges.push(target);
-        } 
-        currentEditor.setDecorations(decoration, ranges);
-     });
-    
-    
+    // default with active.
+    _updateVersions(vscode.window.activeTextEditor);
 }
 
 class QueryResult {
