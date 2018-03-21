@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 import { TextEditorDecorationType } from 'vscode';
 import { join } from 'path';
-import { readFileSync } from 'fs';
+import { readFileSync, statSync, readdirSync } from 'fs';
 import { merge } from 'lodash';
 
 const darkBackground: string = "rgba(60, 60, 60, .8)";
@@ -46,7 +46,8 @@ function _createDecorationType(text: string): TextEditorDecorationType {
 
 export interface IPackageJsonDef {
     dependencies?: Object;
-    devDependencies?: Object 
+    devDependencies?: Object;
+    version?: string;
 }
 
 function _getPackageJSONObject(folderPath: vscode.WorkspaceFolder) {
@@ -57,25 +58,54 @@ function _getPackageJSONObject(folderPath: vscode.WorkspaceFolder) {
 }
 
 /**
+ * 
+ * @param name determine weather or not is a native module.
+ */
+function _nativeModule(name: string): string {
+    const natives: Array<string> = Object.keys((process as any).binding('natives'));
+    for (const native of natives)
+        if (native == name)
+            return `[NATIVE] ${process.version}`;    
+    return null;    
+}
+
+
+
+function _localModule(name: string, packageJSON: IPackageJsonDef): string {
+    if (name[0] == '.')
+        return `Local v${packageJSON.version || "No version field"}`;
+    return null;
+}
+
+/**
  * Will search package.json and find the module name and version.
  * @param name 
  */
 function _getVersion(name: string): string {
     const data: IPackageJsonDef = { dependencies: {}, devDependencies: {} };
-
+    const packageJsons: Array<IPackageJsonDef> = [];
     // require all package.json's present, then load the data array.
     for (const folder of vscode.workspace.workspaceFolders)
     {
         const packageJSON = _getPackageJSONObject(folder) as IPackageJsonDef;
-
+        packageJsons.push(packageJSON);
         if (packageJSON.dependencies)
             data.dependencies = merge(data.dependencies, packageJSON.dependencies);
         if (packageJSON.devDependencies)
             data.devDependencies = merge(data.devDependencies, packageJSON.devDependencies);
     }
-    if (!data.dependencies[name] && !data.devDependencies[name])
+    const native = _nativeModule(name);
+    const local = (() => {
+        for (const packageJSON of packageJsons)
+        {
+            const v = _localModule(name, packageJSON);
+            if (v) return v;
+        }
+        return null;
+    })();
+    if (!data.dependencies[name] && !data.devDependencies[name] && !native && !local)
         return "Not installed";    
-    return data.dependencies[name] || data.devDependencies[name];
+    return data.dependencies[name] || data.devDependencies[name] || native || local;
 }
 
 function _updateVersions(editor: vscode.TextEditor) {
@@ -115,7 +145,6 @@ function _updateVersions(editor: vscode.TextEditor) {
 export function activate(context: vscode.ExtensionContext) {
 
     console.log('NPM version utility loaded.');
-    
     vscode.window.onDidChangeTextEditorSelection(event => _updateVersions(event.textEditor));
     vscode.window.onDidChangeActiveTextEditor(event => _updateVersions(event));
 
