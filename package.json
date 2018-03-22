@@ -4,6 +4,10 @@
     "description": "A lightweight inline version view utility.",
     "version": "0.0.3",
     "publisher": "KyleKing",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/kingerking/npm-version-util.git"
+    },
     "engines": {
         "vscode": "^1.20.0"
     },
