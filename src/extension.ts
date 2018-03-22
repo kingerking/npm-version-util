@@ -141,7 +141,7 @@ function _updateVersions(editor: vscode.TextEditor) {
             lines.push(end.line);
         else continue;
         const target = new Range(new Position(end.line, start.character == 0 ? start.character : start.character - 1), new Position(end.line, end.character - 1));
-        const lineQuery: RegexpCluster = new RegexpCluster(/'.*'/g, /".*"/g);
+        const lineQuery: RegexpCluster = new RegexpCluster(/'.*?'/g, /".*?"/g);
         const name = moduleName(lineQuery, lineData, skip);
         const decorationMessage: string = !name ? "Not installed" : _getVersion(name);
         // if (!name) console.log("module not defined: ", name);
