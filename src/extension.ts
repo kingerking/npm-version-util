@@ -12,11 +12,17 @@ const lightBackground: string = "rgba(155, 155, 155, .8)";
 let ranges: Array<vscode.Range> = [];
 let decorations: Array<vscode.TextEditorDecorationType> = [];
 
-function moduleName(reg: RegexpCluster, data: string): string
+function moduleName(reg: RegexpCluster, data: string, skipOccurrences: number = 0): string
 {
-    let match;
+    let match: any, i: number = 0;
     while (match = reg.exec(data))
-        if (match[0]) return match[0].replace(/['\"]/g, "");    
+    {
+        if (i++ < skipOccurrences) 
+            continue;
+        const name = match[0].replace(/['\"]/g, "");
+        if (match[0])
+            return name;    
+    }
     return null;
 }
 
@@ -53,7 +59,6 @@ export interface IPackageJsonDef {
 function _getPackageJSONObject(folderPath: vscode.WorkspaceFolder) {
     const path = join(folderPath.uri.path, 'package.json');
     const obj = JSON.parse(readFileSync(path).toString('utf-8'));
-
     return obj;
 }
 
@@ -65,7 +70,7 @@ function _nativeModule(name: string): string {
     const natives: Array<string> = Object.keys((process as any).binding('natives'));
     for (const native of natives)
         if (native == name)
-            return `[NATIVE] ${process.version}`;    
+            return `Node ${process.version}`;    
     return null;    
 }
 
@@ -112,7 +117,7 @@ function _updateVersions(editor: vscode.TextEditor) {
     // const regexp = new RegexpCluster(/require\(.*"/g, /require\(.*'/g, /import.*from.*'/g, /import.*from.*"/g);
 
     const results: Array<QueryResult> = new DocumentQuery(
-        new RegexpCluster(/require\(.*"/g, /require\(.*'/g, /import.*from.*'/g, /import.*from.*"/g)).exec(editor.document);
+        new RegexpCluster(/require\(\".*?"\)/g, /require\(\'.*?'\)/g, /import.*from.*'/g, /import.*from.*"/g)).exec(editor.document);
 
     let match;
     // remove all instances of the given decoration
@@ -124,12 +129,20 @@ function _updateVersions(editor: vscode.TextEditor) {
     if (ranges.length !== 0) ranges = [];
     if (decorations.length !== 0) decorations = [];
 
+    const lines: Array<number> = [];
+
     for (const result of results) {
         const { Position, Range } = vscode;
+
         const { match, range, lineData } = result;
-        const { end } = range;
-        const target = new Range(new Position(end.line, end.character), new Position(end.line, end.character));
-        const name = moduleName(new RegexpCluster(/'.*'/, /".*"/), lineData);
+        const { end, start } = range;
+        let skip = 0;
+        if (lines.indexOf(end.line) == -1)
+            lines.push(end.line);
+        else continue;
+        const target = new Range(new Position(end.line, start.character == 0 ? start.character : start.character - 1), new Position(end.line, end.character - 1));
+        const lineQuery: RegexpCluster = new RegexpCluster(/'.*'/g, /".*"/g);
+        const name = moduleName(lineQuery, lineData, skip);
         const decorationMessage: string = !name ? "Not installed" : _getVersion(name);
         // if (!name) console.log("module not defined: ", name);
 
@@ -143,10 +156,9 @@ function _updateVersions(editor: vscode.TextEditor) {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-
     console.log('NPM version utility loaded.');
     vscode.window.onDidChangeTextEditorSelection(event => _updateVersions(event.textEditor));
-    vscode.window.onDidChangeActiveTextEditor(event => _updateVersions(event));
+    vscode.window.onDidChangeActiveTextEditor(event => event ? _updateVersions(event) : () => { });
 
     // default with active.
     _updateVersions(vscode.window.activeTextEditor);
