@@ -19,7 +19,7 @@ function moduleName(reg: RegexpCluster, data: string, skipOccurrences: number = 
     {
         if (i++ < skipOccurrences) 
             continue;
-        const name = match[0].replace(/['\"]/g, "");
+        const name = match[0].replace(/'|"|\(|\)|require/g, "");
         if (match[0])
             return name;    
     }
@@ -74,13 +74,12 @@ function _nativeModule(name: string): string {
     return null;    
 }
 
-
-
 function _localModule(name: string, packageJSON: IPackageJsonDef): string {
     if (name[0] == '.')
         return `Local v${packageJSON.version || "No version field"}`;
     return null;
 }
+
 
 /**
  * Will search package.json and find the module name and version.
@@ -100,17 +99,9 @@ function _getVersion(name: string): string {
             data.devDependencies = merge(data.devDependencies, packageJSON.devDependencies);
     }
     const native = _nativeModule(name);
-    const local = (() => {
-        for (const packageJSON of packageJsons)
-        {
-            const v = _localModule(name, packageJSON);
-            if (v) return v;
-        }
-        return null;
-    })();
-    if (!data.dependencies[name] && !data.devDependencies[name] && !native && !local)
-        return "Not installed";    
-    return data.dependencies[name] || data.devDependencies[name] || native || local;
+    if (!data.dependencies[name] && !data.devDependencies[name] && !native)
+        return "Not installed";
+    return data.dependencies[name] || data.devDependencies[name] || native;
 }
 
 function _updateVersions(editor: vscode.TextEditor) {
@@ -140,12 +131,14 @@ function _updateVersions(editor: vscode.TextEditor) {
         if (lines.indexOf(end.line) == -1)
             lines.push(end.line);
         else continue;
-        const target = new Range(new Position(end.line, start.character == 0 ? start.character : start.character - 1), new Position(end.line, end.character - 1));
-        const lineQuery: RegexpCluster = new RegexpCluster(/'.*?'/g, /".*?"/g);
+        const target = new Range(new Position(end.line, start.character == 0 ? start.character : lineData[0] == 'i' ? start.character : start.character - 1),
+            new Position(end.line, lineData[0] == 'i' ? end.character : end.character - 1));
+        const lineQuery: RegexpCluster = new RegexpCluster(/require\('.*?'/g, /require\(".*?"/g);
         const name = moduleName(lineQuery, lineData, skip);
+        // skip local modules.
+        if (name && name[0] == '.') continue;
         const decorationMessage: string = !name ? "Not installed" : _getVersion(name);
-        // if (!name) console.log("module not defined: ", name);
-
+        
         decorations.push(_createDecorationType(decorationMessage));
         ranges.push(target);
     }
